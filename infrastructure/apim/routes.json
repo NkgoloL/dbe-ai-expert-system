@@ -1,0 +1,121 @@
+{
+  "apis": [
+    {
+      "name": "DBE Expert System API",
+      "version": "v1",
+      "path": "/api/v1",
+      "description": "Core AI expert system APIs for knowledge orchestration",
+      "operations": [
+        {
+          "name": "Health Check",
+          "method": "GET",
+          "path": "/health",
+          "backend": "agent-orchestrator:8000",
+          "description": "Service health status",
+          "policies": ["rate-limit"]
+        },
+        {
+          "name": "Ask Agent",
+          "method": "POST",
+          "path": "/ask",
+          "backend": "agent-orchestrator:8000",
+          "description": "Query the expert system for policy guidance",
+          "policies": ["rate-limit", "jwt", "request-logging"],
+          "request": {
+            "schema": "QueryRequest",
+            "example": {
+              "query": "What is the policy on school infrastructure?",
+              "user_id": "user123"
+            }
+          },
+          "response": {
+            "schema": "AgentResponse",
+            "statusCode": 200
+          }
+        },
+        {
+          "name": "Submit Feedback",
+          "method": "POST",
+          "path": "/feedback",
+          "backend": "agent-orchestrator:8000",
+          "description": "Submit feedback on system responses for model improvement",
+          "policies": ["rate-limit", "jwt", "request-logging"],
+          "request": {
+            "schema": "FeedbackPayload",
+            "example": {
+              "query": "What is the policy on infrastructure?",
+              "response": "Infrastructure policy recommends...",
+              "rating": 4
+            }
+          },
+          "response": {
+            "statusCode": 200
+          }
+        }
+      ]
+    }
+  ],
+  "backends": [
+    {
+      "name": "agent-orchestrator",
+      "service": "agent-orchestrator-service.default.svc.cluster.local",
+      "port": 8000,
+      "healthcheck": "/health",
+      "timeout": "30s",
+      "retryPolicy": {
+        "enabled": true,
+        "maxRetries": 3,
+        "backoff": "exponential"
+      }
+    }
+  ],
+  "schemas": {
+    "QueryRequest": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Question for the expert system"
+        },
+        "user_id": {
+          "type": "string",
+          "description": "User identifier for tracking"
+        }
+      },
+      "required": ["query"]
+    },
+    "AgentResponse": {
+      "type": "object",
+      "properties": {
+        "response": {
+          "type": "string",
+          "description": "The system's expert response"
+        },
+        "sources": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Sources used in the response"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Confidence score (0-1)"
+        }
+      }
+    },
+    "FeedbackPayload": {
+      "type": "object",
+      "properties": {
+        "query": {"type": "string"},
+        "response": {"type": "string"},
+        "rating": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        }
+      },
+      "required": ["query", "response", "rating"]
+    }
+  }
+}

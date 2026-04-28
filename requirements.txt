@@ -8,6 +8,7 @@ azure-identity==1.14.0
 azure-mgmt-resource==23.1.0
 python-dotenv==1.0.0
 requests==2.31.0
+httpx==0.27.0
 gremlinpython==3.7.0
 azure-storage-blob==12.18.1
 pytest==7.4.2

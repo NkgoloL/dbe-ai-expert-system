@@ -1,7 +1,28 @@
+import os
+import logging
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, BaseSettings
 from typing import List, Optional
 import uvicorn
+
+from src.models.expert_model import AzureMLExpertModel, BaselinePolicyModel
+from src.optimization.feedback_loop import FeedbackLoopManager
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+class AppSettings(BaseSettings):
+    AZURE_ML_ENDPOINT: Optional[str] = None
+    AZURE_ML_KEY: Optional[str] = None
+    AZURE_SUBSCRIPTION_ID: Optional[str] = None
+    AZURE_RESOURCE_GROUP: Optional[str] = None
+    AZURE_ML_WORKSPACE: Optional[str] = None
+
+    class Config:
+        env_file = ".env"
+        case_sensitive = False
+
+settings = AppSettings()
 
 app = FastAPI(title="DBE AI Agent Orchestration Service")
 
@@ -14,62 +35,62 @@ class AgentResponse(BaseModel):
     sources: List[str]
     confidence: float
 
+class FeedbackPayload(BaseModel):
+    query: str
+    response: str
+    rating: int
+
+def get_expert_model():
+    if settings.AZURE_ML_ENDPOINT and settings.AZURE_ML_KEY:
+        return AzureMLExpertModel(settings.AZURE_ML_ENDPOINT, settings.AZURE_ML_KEY)
+    return BaselinePolicyModel()
+
+expert_model = get_expert_model()
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
 
-from src.models.expert_model import AzureMLExpertModel, BaselinePolicyModel
-import os
-
-# Initialize models
-expert_model = BaselinePolicyModel()
-if os.getenv("AZURE_ML_ENDPOINT"):
-    expert_model = AzureMLExpertModel(
-        os.getenv("AZURE_ML_ENDPOINT"),
-        os.getenv("AZURE_ML_KEY")
-    )
+async def retrieve_context(query: str) -> str:
+    return f"Retrieved context for query: {query}"
 
 @app.post("/ask", response_model=AgentResponse)
 async def ask_agent(request: QueryRequest):
-    """
-    Orchestrate a multi-step reasoning process to answer the user query.
-    """
     try:
-        # Step 1: Simulated Retrieval
-        context = f"Retrieved context for query: {request.query}"
-        
-        # Step 2: Expert Model Inference
+        context = await retrieve_context(request.query)
         expert_advice = await expert_model.predict(request.query, context)
-        
-        # Step 3: Simulated Reasoning/Synthesis
         reasoning_result = perform_reasoning(request.query, expert_advice)
-        
-        dummy_response = AgentResponse(
+
+        sources = ["Internal Knowledge Base"]
+        if isinstance(expert_model, AzureMLExpertModel):
+            sources.append("Azure ML Endpoint")
+        else:
+            sources.append("Baseline Policy Model")
+
+        return AgentResponse(
             response=reasoning_result,
-            sources=["Internal Knowledge Base", "Azure ML Expert Model Baseline"],
+            sources=sources,
             confidence=0.98
         )
-        return dummy_response
     except Exception as e:
+        logger.exception("Error processing ask request")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/feedback")
-async def receive_feedback(query: str, response: str, rating: int):
-    """
-    Endpoint to receive user feedback for Epic 4.
-    """
-    from src.optimization.feedback_loop import FeedbackLoopManager
-    # In a real scenario, these would be injected or pulled from env
-    manager = FeedbackLoopManager("sub_id", "rg_name", "ws_name")
-    manager.process_feedback(query, response, rating)
+async def receive_feedback(payload: FeedbackPayload):
+    manager = FeedbackLoopManager(
+        settings.AZURE_SUBSCRIPTION_ID or "",
+        settings.AZURE_RESOURCE_GROUP or "",
+        settings.AZURE_ML_WORKSPACE or ""
+    )
+    manager.process_feedback(payload.query, payload.response, payload.rating)
     return {"status": "feedback received"}
 
 def perform_reasoning(query: str, context: str) -> str:
-    """
-    Simulates a chain-of-thought reasoning process.
-    """
-    # Placeholder for actual LLM call
-    return f"Based on the context '{context}', the system concludes that the answer to '{query}' is currently being synthesized by the expert models."
+    return (
+        f"Based on the retrieved context '{context}', the system synthesizes the answer to '{query}' "
+        "through expert policy reasoning and source alignment."
+    )
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))

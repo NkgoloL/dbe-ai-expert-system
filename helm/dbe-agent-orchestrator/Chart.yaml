@@ -1,0 +1,22 @@
+apiVersion: v2
+name: dbe-agent-orchestrator
+description: Helm chart for DBE AI Agent Orchestration service on AKS
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
+keywords:
+  - dbe
+  - ai
+  - orchestration
+  - kubernetes
+
+maintainers:
+  - name: DBE AI Team
+    email: admin@dbe.gov.za
+
+home: https://github.com/NkgoloL/dbe-ai-expert-system
+sources:
+  - https://github.com/NkgoloL/dbe-ai-expert-system
+
+dependencies: []

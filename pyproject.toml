@@ -1,0 +1,33 @@
+[project]
+name = "dbe-ai-expert-system"
+version = "0.1.0"
+description = "Azure AI Expert System for knowledge ingestion, expert reasoning, and orchestration."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+  {name = "DBE AI Expert System"}
+]
+dependencies = [
+  "fastapi==0.103.1",
+  "uvicorn==0.23.2",
+  "pydantic==2.3.0",
+  "azure-cosmos==4.5.1",
+  "azure-ai-ml==1.10.0",
+  "azure-identity==1.14.0",
+  "azure-mgmt-resource==23.1.0",
+  "python-dotenv==1.0.0",
+  "requests==2.31.0",
+  "httpx==0.27.0",
+  "gremlinpython==3.7.0",
+  "azure-storage-blob==12.18.1",
+  "pytest==7.4.2"
+]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"src" = "src"}
+packages = ["src", "src.ingestion", "src.models", "src.orchestration", "src.optimization"]

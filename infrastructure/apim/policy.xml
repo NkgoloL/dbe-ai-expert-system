@@ -1,35 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <policies>
     <inbound>
         <base />
+        <!-- Security Headers -->
         <set-header name="X-Content-Type-Options" exists-action="override">
             <value>nosniff</value>
         </set-header>
-        <rate-limit-by-key calls="100" renewal-period="60" counter-key="@(context.Request.IpAddress)" />
+        <set-header name="X-Frame-Options" exists-action="override">
+            <value>DENY</value>
+        </set-header>
+        <set-header name="X-XSS-Protection" exists-action="override">
+            <value>1; mode=block</value>
+        </set-header>
+        
+        <!-- Rate Limiting by IP -->
+        <rate-limit-by-key calls="1000" renewal-period="60" counter-key="@(context.Request.IpAddress)" />
+        
+        <!-- JWT Validation from Key Vault -->
         <validate-jwt header-name="Authorization" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized. Access token is missing or invalid.">
             <openid-config url="https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration" />
             <required-claims>
                 <claim name="aud">
                     <value>{{client-id}}</value>
                 </claim>
+                <claim name="iss" />
             </required-claims>
         </validate-jwt>
+        
+        <!-- CORS Configuration -->
         <cors allow-credentials="true">
             <allowed-origins>
                 <origin>https://dbe-expert.gov.za</origin>
+                <origin>https://localhost:3000</origin>
             </allowed-origins>
             <allowed-methods preflight-max-age="300">
                 <method>GET</method>
                 <method>POST</method>
+                <method>OPTIONS</method>
             </allowed-methods>
+            <allowed-headers>
+                <header>Content-Type</header>
+                <header>Authorization</header>
+                <header>Accept</header>
+            </allowed-headers>
         </cors>
+        
+        <!-- Add Request Tracing ID -->
+        <set-header name="X-Request-ID" exists-action="override">
+            <value>@(context.RequestId)</value>
+        </set-header>
+        
+        <!-- Log Request Details -->
+        <log-to-eventhub logger-id="apim-logger" partition-key="@(context.Request.IpAddress)">
+            @{
+                return new JObject(
+                    new JProperty("timestamp", DateTime.UtcNow),
+                    new JProperty("request-id", context.RequestId),
+                    new JProperty("ip-address", context.Request.IpAddress),
+                    new JProperty("method", context.Request.Method),
+                    new JProperty("path", context.Request.Url.Path),
+                    new JProperty("user-principal", context.User?.Name ?? "anonymous")
+                ).ToString();
+            }
+        </log-to-eventhub>
     </inbound>
+    
     <backend>
         <base />
     </backend>
+    
     <outbound>
         <base />
+        <!-- Add Response Headers -->
+        <set-header name="X-Request-ID" exists-action="append">
+            <value>@(context.RequestId)</value>
+        </set-header>
+        <set-header name="Cache-Control" exists-action="override">
+            <value>no-cache, max-age=3600</value>
+        </set-header>
+        <!-- Log Response Details -->
+        <log-to-eventhub logger-id="apim-logger" partition-key="@(context.Request.IpAddress)">
+            @{
+                return new JObject(
+                    new JProperty("timestamp", DateTime.UtcNow),
+                    new JProperty("request-id", context.RequestId),
+                    new JProperty("response-status", context.Response.StatusCode),
+                    new JProperty("elapsed-ms", context.Elapsed.TotalMilliseconds)
+                ).ToString();
+            }
+        </log-to-eventhub>
     </outbound>
+    
     <on-error>
         <base />
+        <!-- Error Logging -->
+        <log-to-eventhub logger-id="apim-logger">
+            @{
+                return new JObject(
+                    new JProperty("timestamp", DateTime.UtcNow),
+                    new JProperty("request-id", context.RequestId),
+                    new JProperty("error-reason", context.LastError?.Reason),
+                    new JProperty("error-message", context.LastError?.Message)
+                ).ToString();
+            }
+        </log-to-eventhub>
     </on-error>
 </policies>

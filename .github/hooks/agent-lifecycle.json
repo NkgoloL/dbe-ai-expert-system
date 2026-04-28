@@ -1,0 +1,11 @@
+{
+  "name": "Agent Lifecycle Enforcement",
+  "description": "A metadata hook for agents to enforce documentation, testing, and commit/push behavior when modifying this repository.",
+  "events": ["pre-task", "post-task"],
+  "recommendedActions": [
+    "Review AGENT_INSTRUCTIONS.md before modifying files",
+    "Add or update tests for each logical change",
+    "Document work in README or release notes",
+    "Create a descriptive git commit and push changes"
+  ]
+}

@@ -1,0 +1,159 @@
+# Default values for dbe-agent-orchestrator Helm chart
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Global configuration
+global:
+  environment: development  # development, staging, production
+  domain: dbe-expert.gov.za
+  namespace: default
+
+# Replica and scaling configuration
+replicaCount: 2
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Container image configuration
+image:
+  registry: <acr-name>.azurecr.io
+  repository: agent-orchestrator
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Service Account
+serviceAccount:
+  create: true
+  annotations:
+    azure.workload.identity/client-id: ""
+  name: agent-orchestrator-sa
+
+# Pod configuration
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8000"
+  prometheus.io/path: "/metrics"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+
+# Service configuration
+service:
+  type: LoadBalancer
+  port: 80
+  targetPort: 8000
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-internal: "false"
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "azure/application-gateway"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    appgw.ingress.kubernetes.io/backend-protocol: "http"
+  hosts:
+    - host: api.dbe-expert.gov.za
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: dbe-api-tls
+      hosts:
+        - api.dbe-expert.gov.za
+
+# Resource requests and limits
+resources:
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+# Health checks
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 2
+
+# Environment configuration
+env:
+  ENVIRONMENT: "{{ .Values.global.environment }}"
+  PORT: "8000"
+  LOG_LEVEL: "INFO"
+
+# Secrets from Key Vault
+secrets:
+  cosmosEndpoint: "cosmos-endpoint"
+  cosmosKey: "cosmos-key"
+  azureMLEndpoint: "azure-ml-endpoint"
+  azureMLKey: "azure-ml-key"
+  storageConnection: "storage-connection-string"
+  jwtSecret: "jwt-secret"
+
+# Monitoring
+monitoring:
+  enabled: true
+  applicationInsights:
+    key: ""
+
+# Node affinity
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/os
+          operator: In
+          values:
+          - linux
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Network policy
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+    - Egress
+
+# Persistent storage (optional)
+persistence:
+  enabled: false
+  storageClass: "default"
+  size: 1Gi
+  mountPath: /data
